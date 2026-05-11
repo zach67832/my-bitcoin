@@ -33,6 +33,85 @@
   .change-up { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
   .change-down { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
   .change-neutral { background: #1f1f1f; color: #888; }
+  
+  /* Fear & Greed Card */
+  .fg-card {
+    background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);
+    border: 1px solid #222;
+    border-radius: 20px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .fg-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .fg-title {
+    font-size: 14px;
+    color: #888;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .fg-label-text {
+    font-size: 13px;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 20px;
+  }
+  .fg-main {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+  .fg-circle {
+    position: relative;
+    width: 110px;
+    height: 110px;
+    flex-shrink: 0;
+  }
+  .fg-circle svg { transform: rotate(-90deg); }
+  .fg-circle-bg { fill: none; stroke: #1f1f1f; stroke-width: 10; }
+  .fg-circle-progress {
+    fill: none;
+    stroke-width: 10;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1s ease-out, stroke 0.5s;
+  }
+  .fg-circle-value {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 28px;
+    font-weight: 700;
+    direction: ltr;
+  }
+  .fg-info { flex: 1; }
+  .fg-status {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .fg-desc {
+    font-size: 12px;
+    color: #888;
+    line-height: 1.5;
+  }
+  .fg-history {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid #222;
+    font-size: 11px;
+  }
+  .fg-history-item { text-align: center; flex: 1; }
+  .fg-history-label { color: #666; margin-bottom: 4px; }
+  .fg-history-value { font-weight: 600; font-size: 13px; }
+  
   .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
   .stat-card { background: #131313; border: 1px solid #1f1f1f; border-radius: 14px; padding: 14px; }
   .stat-label { font-size: 11px; color: #888; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -76,6 +155,41 @@
   <div class="price-label">מחיר נוכחי</div>
   <div class="price-value skeleton" id="price">$00,000</div>
   <span class="price-change change-neutral" id="change24h">--</span>
+</div>
+
+<!-- Fear & Greed Index Card -->
+<div class="fg-card">
+  <div class="fg-header">
+    <div class="fg-title">😱 מדד פחד וחמדנות</div>
+  </div>
+  <div class="fg-main">
+    <div class="fg-circle">
+      <svg width="110" height="110">
+        <circle class="fg-circle-bg" cx="55" cy="55" r="48"/>
+        <circle class="fg-circle-progress" id="fgProgress" cx="55" cy="55" r="48" 
+                stroke-dasharray="301.6" stroke-dashoffset="301.6" stroke="#888"/>
+      </svg>
+      <div class="fg-circle-value" id="fgValue">--</div>
+    </div>
+    <div class="fg-info">
+      <div class="fg-status" id="fgStatus">טוען...</div>
+      <div class="fg-desc" id="fgDesc">מודד את הסנטימנט של שוק הקריפטו</div>
+    </div>
+  </div>
+  <div class="fg-history">
+    <div class="fg-history-item">
+      <div class="fg-history-label">אתמול</div>
+      <div class="fg-history-value" id="fgYesterday">--</div>
+    </div>
+    <div class="fg-history-item">
+      <div class="fg-history-label">שבוע</div>
+      <div class="fg-history-value" id="fgWeek">--</div>
+    </div>
+    <div class="fg-history-item">
+      <div class="fg-history-label">חודש</div>
+      <div class="fg-history-value" id="fgMonth">--</div>
+    </div>
+  </div>
 </div>
 
 <div class="stats-grid">
@@ -129,7 +243,7 @@
 <script>
 let chart = null;
 let currentDays = 1;
-let realAth = 126198; // ATH fallback - יוחלף בערך אמיתי מ-CoinGecko
+let realAth = 126198;
 
 const fmt = {
   usd: (n) => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }),
@@ -162,10 +276,83 @@ function setStatus(online, message) {
   }
 }
 
-// מנקה את ה-ATH הישן מהזיכרון בעת טעינה ראשונה
 localStorage.removeItem('btc_ath');
 
-// פונקציה שמביאה את ה-ATH האמיתי מ-CoinGecko
+// Fear & Greed Index
+function getFgColor(value) {
+  if (value <= 24) return '#dc2626'; // אדום עמוק - פחד קיצוני
+  if (value <= 44) return '#f97316'; // כתום - פחד
+  if (value <= 55) return '#eab308'; // צהוב - ניטרלי
+  if (value <= 74) return '#84cc16'; // ירוק בהיר - חמדנות
+  return '#22c55e'; // ירוק עמוק - חמדנות קיצונית
+}
+
+function getFgStatus(value) {
+  if (value <= 24) return { text: '😱 פחד קיצוני', desc: 'המשקיעים מפוחדים. הזדמנות קנייה פוטנציאלית?' };
+  if (value <= 44) return { text: '😟 פחד', desc: 'השוק מודאג. זהירות מומלצת.' };
+  if (value <= 55) return { text: '😐 ניטרלי', desc: 'השוק במצב מאוזן.' };
+  if (value <= 74) return { text: '😊 חמדנות', desc: 'אופטימיות בשוק. שים לב להתחממות יתר.' };
+  return { text: '🤑 חמדנות קיצונית', desc: 'השוק חם מדי. אפשרות לתיקון בקרוב.' };
+}
+
+async function fetchFearGreed() {
+  try {
+    // ה-API של Alternative.me מחזיר את ההיסטוריה
+    const res = await fetch('https://api.alternative.me/fng/?limit=31');
+    if (!res.ok) throw new Error('Fear & Greed API failed');
+    const data = await res.json();
+    
+    if (!data.data || data.data.length === 0) throw new Error('No data');
+    
+    const today = parseInt(data.data[0].value);
+    const yesterday = data.data[1] ? parseInt(data.data[1].value) : null;
+    const weekAgo = data.data[7] ? parseInt(data.data[7].value) : null;
+    const monthAgo = data.data[30] ? parseInt(data.data[30].value) : null;
+    
+    // עדכון העיגול
+    const color = getFgColor(today);
+    const status = getFgStatus(today);
+    const circumference = 301.6; // 2 * π * 48
+    const offset = circumference - (today / 100) * circumference;
+    
+    const progress = document.getElementById('fgProgress');
+    progress.style.stroke = color;
+    progress.style.strokeDashoffset = offset;
+    
+    const valueEl = document.getElementById('fgValue');
+    valueEl.textContent = today;
+    valueEl.style.color = color;
+    
+    document.getElementById('fgStatus').textContent = status.text;
+    document.getElementById('fgStatus').style.color = color;
+    document.getElementById('fgDesc').textContent = status.desc;
+    
+    // היסטוריה
+    if (yesterday !== null) {
+      const yEl = document.getElementById('fgYesterday');
+      yEl.textContent = yesterday;
+      yEl.style.color = getFgColor(yesterday);
+    }
+    if (weekAgo !== null) {
+      const wEl = document.getElementById('fgWeek');
+      wEl.textContent = weekAgo;
+      wEl.style.color = getFgColor(weekAgo);
+    }
+    if (monthAgo !== null) {
+      const mEl = document.getElementById('fgMonth');
+      mEl.textContent = monthAgo;
+      mEl.style.color = getFgColor(monthAgo);
+    }
+    
+    return true;
+  } catch (err) {
+    console.log('Fear & Greed fetch failed:', err);
+    document.getElementById('fgStatus').textContent = 'לא זמין';
+    document.getElementById('fgDesc').textContent = 'לא ניתן לטעון את המדד כעת';
+    return false;
+  }
+}
+
 async function fetchRealAth() {
   try {
     const res = await fetch('https://api.coingecko.com/api/v3/coins/bitcoin?localization=false&tickers=false&community_data=false&developer_data=false&sparkline=false');
@@ -261,7 +448,6 @@ async function fetchPrice() {
       document.getElementById('mcap').textContent = fmt.big(mcap);
       document.getElementById('mcap').classList.remove('skeleton');
       
-      // אם המחיר הנוכחי גבוה מה-ATH - עדכן
       if (parsed.price > realAth) {
         realAth = parsed.price;
         document.getElementById('ath').textContent = fmt.usd(realAth);
@@ -447,7 +633,7 @@ document.querySelectorAll('.chart-tab').forEach(tab => {
 document.getElementById('refreshBtn').addEventListener('click', async (e) => {
   const btn = e.currentTarget;
   btn.classList.add('spinning');
-  await Promise.all([fetchRealAth(), fetchPrice(), fetchChart(currentDays), fetchNews()]);
+  await Promise.all([fetchRealAth(), fetchPrice(), fetchChart(currentDays), fetchNews(), fetchFearGreed()]);
   setTimeout(() => btn.classList.remove('spinning'), 600);
 });
 
@@ -456,12 +642,14 @@ async function init() {
   await fetchPrice();
   fetchChart(currentDays);
   fetchNews();
+  fetchFearGreed();
 }
 
 init();
 setInterval(fetchPrice, 30000);
-setInterval(fetchRealAth, 600000); // עדכון ATH כל 10 דקות
+setInterval(fetchRealAth, 600000);
 setInterval(fetchNews, 300000);
+setInterval(fetchFearGreed, 3600000); // עדכון פעם בשעה (המדד מתעדכן פעם ביום)
 
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) fetchPrice();
