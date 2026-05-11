@@ -129,6 +129,7 @@
 <script>
 let chart = null;
 let currentDays = 1;
+let realAth = 126198; // ATH fallback - יוחלף בערך אמיתי מ-CoinGecko
 
 const fmt = {
   usd: (n) => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }),
@@ -158,6 +159,27 @@ function setStatus(online, message) {
   } else {
     dot.classList.add('offline');
     text.textContent = message || 'לא מקוון';
+  }
+}
+
+// מנקה את ה-ATH הישן מהזיכרון בעת טעינה ראשונה
+localStorage.removeItem('btc_ath');
+
+// פונקציה שמביאה את ה-ATH האמיתי מ-CoinGecko
+async function fetchRealAth() {
+  try {
+    const res = await fetch('https://api.coingecko.com/api/v3/coins/bitcoin?localization=false&tickers=false&community_data=false&developer_data=false&sparkline=false');
+    if (!res.ok) throw new Error('CoinGecko ATH failed');
+    const data = await res.json();
+    realAth = data.market_data.ath.usd;
+    document.getElementById('ath').textContent = fmt.usd(realAth);
+    document.getElementById('ath').classList.remove('skeleton');
+    return true;
+  } catch (err) {
+    console.log('ATH fetch failed, using fallback');
+    document.getElementById('ath').textContent = fmt.usd(realAth);
+    document.getElementById('ath').classList.remove('skeleton');
+    return false;
   }
 }
 
@@ -239,10 +261,11 @@ async function fetchPrice() {
       document.getElementById('mcap').textContent = fmt.big(mcap);
       document.getElementById('mcap').classList.remove('skeleton');
       
-      const ath = Math.max(parsed.price, parseFloat(localStorage.getItem('btc_ath') || '109000'));
-      document.getElementById('ath').textContent = fmt.usd(ath);
-      document.getElementById('ath').classList.remove('skeleton');
-      if (parsed.price > ath - 0.01) localStorage.setItem('btc_ath', parsed.price.toString());
+      // אם המחיר הנוכחי גבוה מה-ATH - עדכן
+      if (parsed.price > realAth) {
+        realAth = parsed.price;
+        document.getElementById('ath').textContent = fmt.usd(realAth);
+      }
       
       const nextHalving = new Date('2028-04-15');
       const daysLeft = Math.round((nextHalving - new Date()) / (1000 * 60 * 60 * 24));
@@ -282,14 +305,6 @@ async function fetchChart(days) {
     
     const labels = data.map(k => formatLabel(new Date(k[0]), days));
     const values = data.map(k => parseFloat(k[4]));
-    const highs = data.map(k => parseFloat(k[2]));
-    
-    const periodHigh = Math.max(...highs);
-    const storedAth = parseFloat(localStorage.getItem('btc_ath') || '109000');
-    if (periodHigh > storedAth) {
-      localStorage.setItem('btc_ath', periodHigh.toString());
-      document.getElementById('ath').textContent = fmt.usd(periodHigh);
-    }
     
     renderChart(labels, values);
     return;
@@ -432,11 +447,12 @@ document.querySelectorAll('.chart-tab').forEach(tab => {
 document.getElementById('refreshBtn').addEventListener('click', async (e) => {
   const btn = e.currentTarget;
   btn.classList.add('spinning');
-  await Promise.all([fetchPrice(), fetchChart(currentDays), fetchNews()]);
+  await Promise.all([fetchRealAth(), fetchPrice(), fetchChart(currentDays), fetchNews()]);
   setTimeout(() => btn.classList.remove('spinning'), 600);
 });
 
 async function init() {
+  await fetchRealAth();
   await fetchPrice();
   fetchChart(currentDays);
   fetchNews();
@@ -444,6 +460,7 @@ async function init() {
 
 init();
 setInterval(fetchPrice, 30000);
+setInterval(fetchRealAth, 600000); // עדכון ATH כל 10 דקות
 setInterval(fetchNews, 300000);
 
 document.addEventListener('visibilitychange', () => {
