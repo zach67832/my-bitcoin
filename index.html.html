@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Bitcoin">
+<title>Bitcoin Tracker ₿</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='50' fill='%23f7931a'/><text x='50' y='72' font-size='70' text-anchor='middle' fill='white' font-family='Arial' font-weight='bold'>%E2%82%BF</text></svg>">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #0a0a0a; color: #fff;
+    min-height: 100vh; padding: 16px; padding-bottom: 32px;
+    max-width: 600px; margin: 0 auto;
+    -webkit-font-smoothing: antialiased;
+  }
+  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 8px 0; }
+  .header-title { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 600; }
+  .btc-logo { width: 32px; height: 32px; background: #f7931a; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #fff; }
+  .live-dot { width: 8px; height: 8px; background: #22c55e; border-radius: 50%; animation: pulse 2s infinite; }
+  .live-dot.offline { background: #ef4444; animation: none; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .live-badge { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #888; }
+  .price-card { background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%); border: 1px solid #222; border-radius: 20px; padding: 24px; margin-bottom: 16px; }
+  .price-label { font-size: 13px; color: #888; margin-bottom: 8px; }
+  .price-value { font-size: 42px; font-weight: 700; letter-spacing: -1px; margin-bottom: 12px; direction: ltr; text-align: right; }
+  .price-change { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; font-size: 14px; font-weight: 600; direction: ltr; }
+  .change-up { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+  .change-down { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+  .change-neutral { background: #1f1f1f; color: #888; }
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .stat-card { background: #131313; border: 1px solid #1f1f1f; border-radius: 14px; padding: 14px; }
+  .stat-label { font-size: 11px; color: #888; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-value { font-size: 16px; font-weight: 600; direction: ltr; text-align: right; }
+  .ath-card { background: linear-gradient(135deg, rgba(247, 147, 26, 0.15) 0%, rgba(247, 147, 26, 0.05) 100%); border: 1px solid rgba(247, 147, 26, 0.3); border-radius: 14px; padding: 14px; }
+  .ath-card .stat-label { color: #f7931a; }
+  .chart-card { background: #131313; border: 1px solid #1f1f1f; border-radius: 16px; padding: 16px; margin-bottom: 16px; }
+  .chart-tabs { display: flex; gap: 6px; margin-bottom: 14px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .chart-tab { background: #1f1f1f; border: none; color: #888; padding: 7px 14px; border-radius: 20px; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+  .chart-tab.active { background: #f7931a; color: #000; }
+  .chart-container { position: relative; height: 200px; }
+  .section-title { font-size: 16px; font-weight: 600; margin: 20px 0 12px; display: flex; align-items: center; gap: 8px; }
+  .news-item { background: #131313; border: 1px solid #1f1f1f; border-radius: 14px; padding: 14px; margin-bottom: 10px; text-decoration: none; color: inherit; display: block; }
+  .news-item:active { background: #1a1a1a; }
+  .news-title { font-size: 14px; font-weight: 600; line-height: 1.4; margin-bottom: 6px; }
+  .news-meta { font-size: 11px; color: #888; display: flex; justify-content: space-between; }
+  .news-source { color: #f7931a; }
+  .loading { color: #666; text-align: center; padding: 20px; font-size: 13px; }
+  .refresh-btn { background: #1f1f1f; border: none; color: #fff; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: transform 0.5s; }
+  .refresh-btn.spinning { transform: rotate(360deg); }
+  .error-msg { color: #ef4444; font-size: 12px; text-align: center; padding: 8px; }
+  .last-update { text-align: center; color: #555; font-size: 11px; margin-top: 16px; }
+  .skeleton { background: linear-gradient(90deg, #1a1a1a 0%, #222 50%, #1a1a1a 100%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 6px; color: transparent; }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-title">
+    <div class="btc-logo">₿</div>
+    <span>Bitcoin</span>
+  </div>
+  <div style="display:flex; align-items:center; gap:10px;">
+    <span class="live-badge"><span class="live-dot" id="statusDot"></span><span id="statusText">חי</span></span>
+    <button class="refresh-btn" id="refreshBtn" aria-label="רענן">↻</button>
+  </div>
+</div>
+
+<div class="price-card">
+  <div class="price-label">מחיר נוכחי</div>
+  <div class="price-value skeleton" id="price">$00,000</div>
+  <span class="price-change change-neutral" id="change24h">--</span>
+</div>
+
+<div class="stats-grid">
+  <div class="ath-card">
+    <div class="stat-label">🏆 שיא כל הזמנים</div>
+    <div class="stat-value skeleton" id="ath">--</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">📉 שפל 24ש'</div>
+    <div class="stat-value skeleton" id="low24">--</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">📈 שיא 24ש'</div>
+    <div class="stat-value skeleton" id="high24">--</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">💰 שווי שוק</div>
+    <div class="stat-value skeleton" id="mcap">--</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">📊 נפח 24ש'</div>
+    <div class="stat-value skeleton" id="volume">--</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">⚡ ימים לחצי הבא</div>
+    <div class="stat-value skeleton" id="halving">--</div>
+  </div>
+</div>
+
+<div class="chart-card">
+  <div class="chart-tabs">
+    <button class="chart-tab active" data-days="1">24 שעות</button>
+    <button class="chart-tab" data-days="7">7 ימים</button>
+    <button class="chart-tab" data-days="30">30 ימים</button>
+    <button class="chart-tab" data-days="90">3 חודשים</button>
+    <button class="chart-tab" data-days="365">שנה</button>
+    <button class="chart-tab" data-days="1825">5 שנים</button>
+  </div>
+  <div class="chart-container">
+    <canvas id="priceChart"></canvas>
+  </div>
+</div>
+
+<div class="section-title">📰 חדשות אחרונות</div>
+<div id="newsContainer">
+  <div class="loading">טוען חדשות...</div>
+</div>
+
+<div class="last-update" id="lastUpdate">--</div>
+
+<script>
+let chart = null;
+let currentDays = 1;
+
+const fmt = {
+  usd: (n) => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }),
+  big: (n) => {
+    if (n >= 1e12) return '$' + (n / 1e12).toFixed(2) + 'T';
+    if (n >= 1e9) return '$' + (n / 1e9).toFixed(2) + 'B';
+    if (n >= 1e6) return '$' + (n / 1e6).toFixed(2) + 'M';
+    return '$' + n.toLocaleString();
+  },
+  pct: (n) => (n >= 0 ? '+' : '') + n.toFixed(2) + '%',
+  date: (ts) => {
+    const now = Date.now();
+    const diffMin = Math.round((now - ts) / 60000);
+    if (diffMin < 1) return 'עכשיו';
+    if (diffMin < 60) return `לפני ${diffMin} ד'`;
+    if (diffMin < 1440) return `לפני ${Math.round(diffMin/60)} שעות`;
+    return new Date(ts).toLocaleDateString('he-IL');
+  }
+};
+
+function setStatus(online, message) {
+  const dot = document.getElementById('statusDot');
+  const text = document.getElementById('statusText');
+  if (online) {
+    dot.classList.remove('offline');
+    text.textContent = 'חי';
+  } else {
+    dot.classList.add('offline');
+    text.textContent = message || 'לא מקוון';
+  }
+}
+
+async function fetchPrice() {
+  const sources = [
+    {
+      name: 'Binance',
+      url: 'https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT',
+      parse: (d) => ({
+        price: parseFloat(d.lastPrice),
+        change: parseFloat(d.priceChangePercent),
+        high: parseFloat(d.highPrice),
+        low: parseFloat(d.lowPrice),
+        volume: parseFloat(d.quoteVolume)
+      })
+    },
+    {
+      name: 'Coinbase',
+      url: 'https://api.coinbase.com/v2/prices/BTC-USD/spot',
+      parse: (d) => ({ price: parseFloat(d.data.amount) })
+    },
+    {
+      name: 'Kraken',
+      url: 'https://api.kraken.com/0/public/Ticker?pair=XBTUSD',
+      parse: (d) => {
+        const t = d.result.XXBTZUSD;
+        return {
+          price: parseFloat(t.c[0]),
+          high: parseFloat(t.h[1]),
+          low: parseFloat(t.l[1]),
+          volume: parseFloat(t.v[1]) * parseFloat(t.c[0])
+        };
+      }
+    },
+    {
+      name: 'CoinGecko',
+      url: 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true&include_market_cap=true',
+      parse: (d) => ({
+        price: d.bitcoin.usd,
+        change: d.bitcoin.usd_24h_change,
+        volume: d.bitcoin.usd_24h_vol,
+        mcap: d.bitcoin.usd_market_cap
+      })
+    }
+  ];
+  
+  for (const source of sources) {
+    try {
+      const res = await fetch(source.url);
+      if (!res.ok) continue;
+      const data = await res.json();
+      const parsed = source.parse(data);
+      
+      if (!parsed.price) continue;
+      
+      document.getElementById('price').textContent = fmt.usd(parsed.price);
+      document.getElementById('price').classList.remove('skeleton');
+      
+      if (parsed.change !== undefined) {
+        const changeEl = document.getElementById('change24h');
+        changeEl.textContent = (parsed.change >= 0 ? '▲ ' : '▼ ') + fmt.pct(parsed.change);
+        changeEl.className = 'price-change ' + (parsed.change >= 0 ? 'change-up' : 'change-down');
+      }
+      
+      if (parsed.high !== undefined) {
+        document.getElementById('high24').textContent = fmt.usd(parsed.high);
+        document.getElementById('high24').classList.remove('skeleton');
+      }
+      if (parsed.low !== undefined) {
+        document.getElementById('low24').textContent = fmt.usd(parsed.low);
+        document.getElementById('low24').classList.remove('skeleton');
+      }
+      if (parsed.volume !== undefined) {
+        document.getElementById('volume').textContent = fmt.big(parsed.volume);
+        document.getElementById('volume').classList.remove('skeleton');
+      }
+      
+      const mcap = parsed.mcap || (parsed.price * 19850000);
+      document.getElementById('mcap').textContent = fmt.big(mcap);
+      document.getElementById('mcap').classList.remove('skeleton');
+      
+      const ath = Math.max(parsed.price, parseFloat(localStorage.getItem('btc_ath') || '109000'));
+      document.getElementById('ath').textContent = fmt.usd(ath);
+      document.getElementById('ath').classList.remove('skeleton');
+      if (parsed.price > ath - 0.01) localStorage.setItem('btc_ath', parsed.price.toString());
+      
+      const nextHalving = new Date('2028-04-15');
+      const daysLeft = Math.round((nextHalving - new Date()) / (1000 * 60 * 60 * 24));
+      document.getElementById('halving').textContent = daysLeft + ' ימים';
+      document.getElementById('halving').classList.remove('skeleton');
+      
+      document.getElementById('lastUpdate').textContent = `עודכן: ${new Date().toLocaleTimeString('he-IL')} (${source.name})`;
+      setStatus(true);
+      return true;
+    } catch (err) {
+      console.log(`${source.name} failed:`, err.message);
+    }
+  }
+  
+  document.getElementById('price').textContent = 'אין חיבור';
+  document.getElementById('price').classList.remove('skeleton');
+  setStatus(false, 'אין חיבור');
+  return false;
+}
+
+async function fetchChart(days) {
+  days = parseInt(days);
+  
+  try {
+    let interval, limit;
+    if (days === 1) { interval = '15m'; limit = 96; }
+    else if (days === 7) { interval = '1h'; limit = 168; }
+    else if (days === 30) { interval = '4h'; limit = 180; }
+    else if (days === 90) { interval = '12h'; limit = 180; }
+    else if (days === 365) { interval = '1d'; limit = 365; }
+    else { interval = '1w'; limit = 260; }
+    
+    const url = `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${interval}&limit=${limit}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Binance chart failed');
+    const data = await res.json();
+    
+    const labels = data.map(k => formatLabel(new Date(k[0]), days));
+    const values = data.map(k => parseFloat(k[4]));
+    const highs = data.map(k => parseFloat(k[2]));
+    
+    const periodHigh = Math.max(...highs);
+    const storedAth = parseFloat(localStorage.getItem('btc_ath') || '109000');
+    if (periodHigh > storedAth) {
+      localStorage.setItem('btc_ath', periodHigh.toString());
+      document.getElementById('ath').textContent = fmt.usd(periodHigh);
+    }
+    
+    renderChart(labels, values);
+    return;
+  } catch (err) {
+    console.log('Binance chart failed, trying CoinGecko');
+  }
+  
+  try {
+    const cgDays = days === 1825 ? 'max' : days;
+    const url = `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=${cgDays}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('CoinGecko chart failed');
+    const data = await res.json();
+    
+    const labels = data.prices.map(p => formatLabel(new Date(p[0]), days));
+    const values = data.prices.map(p => p[1]);
+    
+    renderChart(labels, values);
+  } catch (err) {
+    console.error('All chart sources failed');
+  }
+}
+
+function formatLabel(d, days) {
+  if (days === 1) return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+  if (days <= 30) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+}
+
+function renderChart(labels, values) {
+  const isUp = values[values.length - 1] >= values[0];
+  const color = isUp ? '#22c55e' : '#ef4444';
+  
+  if (chart) chart.destroy();
+  
+  const ctx = document.getElementById('priceChart').getContext('2d');
+  const gradient = ctx.createLinearGradient(0, 0, 0, 200);
+  gradient.addColorStop(0, color + '40');
+  gradient.addColorStop(1, color + '00');
+  
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        data: values,
+        borderColor: color,
+        backgroundColor: gradient,
+        borderWidth: 2,
+        fill: true,
+        tension: 0.3,
+        pointRadius: 0,
+        pointHoverRadius: 5,
+        pointHoverBackgroundColor: color,
+        pointHoverBorderColor: '#fff',
+        pointHoverBorderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { intersect: false, mode: 'index' },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1a1a1a',
+          borderColor: '#333',
+          borderWidth: 1,
+          padding: 10,
+          displayColors: false,
+          callbacks: { label: (ctx) => fmt.usd(ctx.parsed.y) }
+        }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#666', font: { size: 10 }, maxTicksLimit: 6 } },
+        y: {
+          position: 'right',
+          grid: { color: '#1f1f1f' },
+          ticks: { color: '#666', font: { size: 10 }, callback: (v) => '$' + (v/1000).toFixed(0) + 'k' }
+        }
+      }
+    }
+  });
+}
+
+async function fetchNews() {
+  const container = document.getElementById('newsContainer');
+  
+  const feeds = [
+    'https://cointelegraph.com/rss/tag/bitcoin',
+    'https://bitcoinmagazine.com/.rss/full/',
+    'https://news.bitcoin.com/feed/',
+    'https://www.coindesk.com/arc/outboundfeeds/rss/'
+  ];
+  
+  for (const feed of feeds) {
+    try {
+      const url = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feed)}&count=10`;
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (data.status === 'ok' && data.items && data.items.length > 0) {
+        const items = data.items.slice(0, 8).map(item => ({
+          title: item.title.replace(/<[^>]*>/g, '').replace(/&[^;]+;/g, ' '),
+          url: item.link,
+          news_site: data.feed.title || 'Crypto News',
+          published_at: new Date(item.pubDate).getTime()
+        }));
+        renderNews(items);
+        return;
+      }
+    } catch (err) {}
+  }
+  
+  container.innerHTML = '<div class="error-msg">לא ניתן לטעון חדשות כעת</div>';
+}
+
+function renderNews(items) {
+  const container = document.getElementById('newsContainer');
+  container.innerHTML = items.map(item => `
+    <a href="${item.url}" target="_blank" rel="noopener" class="news-item">
+      <div class="news-title">${item.title}</div>
+      <div class="news-meta">
+        <span class="news-source">${item.news_site}</span>
+        <span>${fmt.date(item.published_at)}</span>
+      </div>
+    </a>
+  `).join('');
+}
+
+document.querySelectorAll('.chart-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.chart-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    currentDays = tab.dataset.days;
+    fetchChart(currentDays);
+  });
+});
+
+document.getElementById('refreshBtn').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  btn.classList.add('spinning');
+  await Promise.all([fetchPrice(), fetchChart(currentDays), fetchNews()]);
+  setTimeout(() => btn.classList.remove('spinning'), 600);
+});
+
+async function init() {
+  await fetchPrice();
+  fetchChart(currentDays);
+  fetchNews();
+}
+
+init();
+setInterval(fetchPrice, 30000);
+setInterval(fetchNews, 300000);
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) fetchPrice();
+});
+</script>
+
+</body>
+</html>
